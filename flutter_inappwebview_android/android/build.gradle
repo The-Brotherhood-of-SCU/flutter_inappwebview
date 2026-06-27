@@ -29,8 +29,18 @@ apply plugin: 'com.android.library'
 //   - the -PflutterInAppWebViewAndroidFromSource Gradle property
 // is set, the plugin skips compiling its Java sources and instead consumes
 // the prebuilt AAR. This dramatically shortens downstream build times.
+//
+// The prebuilt AAR is consumed via a *Maven coordinate* (not a local file
+// dep) — that's important because AGP refuses to bundle a local .aar file
+// into another AAR. The prebuild script (`tool/prebuild_android.sh`)
+// publishes the AAR into `android/prebuilt/maven-local/` using the
+// canonical Maven directory layout. This module then adds that directory
+// as a Maven repository and depends on the AAR by coordinates.
+//
 // =========================================================================
-def prebuiltAarFile = file('prebuilt/release/flutter_inappwebview_android-release.aar')
+def prebuiltAarDir = file('prebuilt/release')
+def prebuiltAarFile = file("${prebuiltAarDir}/flutter_inappwebview_android-release.aar")
+def prebuiltMavenRepo = file("${prebuiltAarDir}/maven-local")
 def usePrebuiltAar =
     !System.getenv('FLUTTER_INAPPWEBVIEW_ANDROID_FROM_SOURCE')?.toString().equals('1') &&
     !project.hasProperty('flutterInAppWebViewAndroidFromSource') &&
@@ -38,12 +48,64 @@ def usePrebuiltAar =
 
 if (usePrebuiltAar) {
     println "flutter_inappwebview_android: using prebuilt AAR ${prebuiltAarFile}"
+    // Register the prebuilt Maven repo on every project so the consuming
+    // app (e.g. test app's :app) can resolve `com.pichillilorenzo:...`
+    // through it.
+    rootProject.allprojects {
+        repositories {
+            maven { url prebuiltMavenRepo.toURI() }
+        }
+    }
+    repositories {
+        maven { url prebuiltMavenRepo.toURI() }
+    }
+    // Replace the module's namespace with a placeholder so AGP's manifest
+    // merger doesn't complain that this module and the bundled AAR declare
+    // the same package. The AAR (consumed via Maven) supplies its own
+    // manifest + namespace.
+    if (project.android.hasProperty("namespace")) {
+        android.namespace 'com.pichillilorenzo.flutter_inappwebview_android.prebuilt_stub'
+    }
+    // Source the prebuilt AAR via Maven coordinates — `api` so the
+    // consuming app sees the prebuilt's classes on its compile classpath
+    // (GeneratedPluginRegistrant instantiates InAppWebViewFlutterPlugin).
+    dependencies {
+        api 'com.pichillilorenzo:flutter_inappwebview_android:1.2.0-beta.4'
+    }
+}
+
+// When the prebuilt AAR is in use, suppress source compilation and swap our
+// own AndroidManifest.xml for an empty stub. The original manifest carries
+// `package="com.pichillilorenzo.flutter_inappwebview_android"` which AGP 7+
+// rejects (`Setting the namespace via the package attribute in the source
+// AndroidManifest.xml is no longer supported`). The prebuilt AAR (consumed
+// via Maven above) supplies the real manifest + namespace + classes.
+if (usePrebuiltAar) {
+    def stub = file('src/main/AndroidManifest.xml.bak_stub')
+    if (!stub.exists()) {
+        stub.parentFile.mkdirs()
+        stub.text = '''<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
+'''
+    }
+    android.sourceSets {
+        main {
+            java.srcDirs = []
+            manifest.srcFile stub
+            res.srcDirs = []
+        }
+    }
 }
 
 android {
-    // Conditional for compatibility with AGP <4.2.
     if (project.android.hasProperty("namespace")) {
-        namespace 'com.pichillilorenzo.flutter_inappwebview_android'
+        if (usePrebuiltAar) {
+            // Placeholder when prebuilt AAR is consumed via Maven — the real
+            // namespace comes from the bundled AAR's manifest.
+            namespace 'com.pichillilorenzo.flutter_inappwebview_android.prebuilt_stub'
+        } else {
+            namespace 'com.pichillilorenzo.flutter_inappwebview_android'
+        }
     }
     compileSdk = flutter.compileSdkVersion
 
@@ -80,19 +142,10 @@ android {
     }
 }
 
-// When the prebuilt AAR is in use, suppress source compilation by clearing the
-// java source set and consume the prebuilt .aar as a file dependency. The
-// manifest, resources, and proguard rules still come from android/src so the
-// packaged AAR behaves identically to a source build.
-if (usePrebuiltAar) {
-    android.sourceSets {
-        main {
-            java.srcDirs = []
-            manifest.srcFile 'src/main/AndroidManifest.xml'
-            res.srcDirs = ['src/main/res']
-        }
-    }
-    android.dependencies {
-        implementation files(prebuiltAarFile)
-    }
-}
+// When the prebuilt AAR is in use, the prebuilt Maven repo's published AAR
+// is the canonical source of classes + manifest + resources. AGP refuses to
+// bundle a local .aar file into this module's output AAR (it would produce
+// a broken AAR), but consuming a Maven-published AAR via `api 'group:art:ver'`
+// is allowed. The Maven coordinates resolve through `prebuiltMavenRepo`
+// which is added to the `repositories { ... }` block above only when the
+// prebuilt is in use.

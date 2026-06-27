@@ -2,14 +2,17 @@
 #
 # Regenerate the Android prebuilt AAR for flutter_inappwebview_android.
 #
-# Usage:
-#   bash tool/prebuild_android.sh
-#
 # Output:
 #   android/prebuilt/release/flutter_inappwebview_android-release.aar
+#   android/prebuilt/release/maven-local/com/pichillilorenzo/flutter_inappwebview_android/1.2.0-beta.4/flutter_inappwebview_android-1.2.0-beta.4.aar
+#   android/prebuilt/release/maven-local/com/pichillilorenzo/flutter_inappwebview_android/1.2.0-beta.4/flutter_inappwebview_android-1.2.0-beta.4.pom
 #
-# The script clears the gradle build dir, runs `assembleRelease`, and copies
-# the resulting AAR into the prebuilt directory committed to the repo.
+# The script clears the gradle build dir, runs `assembleRelease`, then
+# publishes the resulting AAR into a Maven directory layout under
+# `prebuilt/release/maven-local/`. The plugin module's build.gradle adds
+# that directory as a Maven repository and depends on the AAR via Maven
+# coordinates — this avoids AGP's "Direct local .aar file dependencies are
+# not supported" guard, which fires when you depend on an .aar file directly.
 #
 # Requirements:
 #   - JDK 17
@@ -45,5 +48,28 @@ fi
 mkdir -p "$AAR_DST_DIR"
 cp -f "$AAR_SRC" "$AAR_DST"
 
+# Publish the AAR into a Maven directory layout. AGP forbids depending on
+# local .aar files directly, but allows Maven coordinates — so we lay the
+# AAR out as if it had been published to a local Maven repo.
+AAR_VER="1.2.0-beta.4"
+MAVEN_GROUP_PATH="com/pichillilorenzo"
+MAVEN_ARTIFACT_DIR="$AAR_DST_DIR/maven-local/$MAVEN_GROUP_PATH/flutter_inappwebview_android/$AAR_VER"
+mkdir -p "$MAVEN_ARTIFACT_DIR"
+cp -f "$AAR_SRC" "$MAVEN_ARTIFACT_DIR/flutter_inappwebview_android-$AAR_VER.aar"
+
+# Minimal POM describing the artifact's coordinates.
+cat > "$MAVEN_ARTIFACT_DIR/flutter_inappwebview_android-$AAR_VER.pom" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.pichillilorenzo</groupId>
+  <artifactId>flutter_inappwebview_android</artifactId>
+  <version>$AAR_VER</version>
+  <packaging>aar</packaging>
+</project>
+EOF
+
 echo "==> Wrote $(ls -la "$AAR_DST")"
+echo "==> Published Maven artifact to $MAVEN_ARTIFACT_DIR"
+ls -la "$MAVEN_ARTIFACT_DIR"
 echo "==> Done. Downstream builds will now skip native Java compilation."
