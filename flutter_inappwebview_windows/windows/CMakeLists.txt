@@ -23,6 +23,33 @@ cmake_policy(VERSION 3.14...3.25)
 # not be changed
 set(PLUGIN_NAME "flutter_inappwebview_windows_plugin")
 
+# =========================================================================
+# Prebuilt DLL support
+# -------------------------------------------------------------------------
+# When the prebuilt artifacts exist at windows/prebuilt/<arch>/<config>/ and
+# FLUTTER_INAPPWEBVIEW_WINDOWS_FROM_SOURCE is not set to "1", the CMake target
+# is wired up as an IMPORTED library that just re-exposes the prebuilt .lib
+# and .dll. This bypasses the 224-source MSVC compile + NuGet restore +
+# C++/WinRT codegen for downstream Flutter app builds.
+# =========================================================================
+set(_PREBUILT_FROM_SOURCE_ENV "$ENV{FLUTTER_INAPPWEBVIEW_WINDOWS_FROM_SOURCE}")
+set(FLUTTER_INAPPWEBVIEW_WINDOWS_USE_PREBUILT_DLL
+    NOT (_PREBUILT_FROM_SOURCE_ENV STREQUAL "1"))
+set(FLUTTER_INAPPWEBVIEW_WINDOWS_PREBUILT_DLL_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/prebuilt/${CMAKE_VS_PLATFORM_NAME}/${CMAKE_BUILD_TYPE}")
+set(FLUTTER_INAPPWEBVIEW_WINDOWS_PREBUILT_DLL
+    "${FLUTTER_INAPPWEBVIEW_WINDOWS_PREBUILT_DLL_DIR}/${PLUGIN_NAME}.dll")
+set(FLUTTER_INAPPWEBVIEW_WINDOWS_PREBUILT_LIB
+    "${FLUTTER_INAPPWEBVIEW_WINDOWS_PREBUILT_DLL_DIR}/${PLUGIN_NAME}.lib")
+
+if(FLUTTER_INAPPWEBVIEW_WINDOWS_USE_PREBUILT_DLL
+   AND EXISTS "${FLUTTER_INAPPWEBVIEW_WINDOWS_PREBUILT_DLL}"
+   AND EXISTS "${FLUTTER_INAPPWEBVIEW_WINDOWS_PREBUILT_LIB}")
+  message(STATUS "flutter_inappwebview_windows: using prebuilt DLL at ${FLUTTER_INAPPWEBVIEW_WINDOWS_PREBUILT_DLL}")
+else()
+  set(FLUTTER_INAPPWEBVIEW_WINDOWS_USE_PREBUILT_DLL FALSE)
+endif()
+
 find_program(NUGET nuget)
 if(NOT NUGET)
   message(NOTICE "Nuget is not installed! The flutter_inappwebview_windows plugin requires it. Check https://inappwebview.dev/docs/intro#setup-windows")
@@ -251,13 +278,33 @@ list(APPEND PLUGIN_SOURCES
 
 # Define the plugin library target. Its name must not be changed (see comment
 # on PLUGIN_NAME above).
-add_library(${PLUGIN_NAME} SHARED
-  "include/flutter_inappwebview_windows/flutter_inappwebview_windows_plugin_c_api.h"
-  "flutter_inappwebview_windows_plugin_c_api.cpp"
-  ${PLUGIN_SOURCES}
-)
+if(FLUTTER_INAPPWEBVIEW_WINDOWS_USE_PREBUILT_DLL)
+  # IMPORTED target — re-exposes the prebuilt .lib/.dll without compiling any
+  # source files. The downstream Flutter Windows toolchain links the consuming
+  # app against this target and copies the .dll into the bundle via the
+  # bundled_libraries hook further down.
+  add_library(${PLUGIN_NAME} SHARED IMPORTED)
+  set_target_properties(${PLUGIN_NAME} PROPERTIES
+    IMPORTED_LOCATION "${FLUTTER_INAPPWEBVIEW_WINDOWS_PREBUILT_DLL}"
+    IMPORTED_IMPLIB   "${FLUTTER_INAPPWEBVIEW_WINDOWS_PREBUILT_LIB}"
+    INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  )
+else()
+  add_library(${PLUGIN_NAME} SHARED
+    "include/flutter_inappwebview_windows/flutter_inappwebview_windows_plugin_c_api.h"
+    "flutter_inappwebview_windows_plugin_c_api.cpp"
+    ${PLUGIN_SOURCES}
+  )
+  # Ensure NuGet-restore custom target runs before the plugin library is built.
+  # The Visual Studio generator picked this up implicitly; Ninja needs the
+  # explicit edge or it tries to compile before packages/ exists.
+  add_dependencies(${PLUGIN_NAME} ${PROJECT_NAME}_DEPS)
 
-if(NOT FLUTTER_WEBVIEW_WINDOWS_USE_TEXTURE_FALLBACK)
+  # Apply per-file compile flags / additional sources for texture support.
+  # (See below; this block must run only in source-build mode.)
+endif()
+
+if(NOT FLUTTER_INAPPWEBVIEW_WINDOWS_USE_PREBUILT_DLL AND NOT FLUTTER_WEBVIEW_WINDOWS_USE_TEXTURE_FALLBACK)
   message(STATUS "Building with D3D texture support.")
   target_compile_definitions("${PLUGIN_NAME}" PRIVATE
     HAVE_FLUTTER_D3D_TEXTURE
@@ -291,21 +338,34 @@ endif()
 # Also, added /bigobj flag.
 function(FLUTTER_INAPPWEBVIEW_WINDOWS_APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_17)
-  target_compile_options(${TARGET} PRIVATE /W4 /wd"4100")
+  target_compile_options(${TARGET} PRIVATE /W4 /wd4100)
   target_compile_options(${TARGET} PRIVATE /EHsc)
   target_compile_options(${TARGET} PRIVATE /bigobj)
   target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
   target_compile_definitions(${TARGET} PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
+  # Silence MSVC 14.5x's static_assert deprecation error for <experimental/coroutine>.
+  # WebView2 / WIL headers include this transitively; without the define, builds
+  # against Visual Studio 18 (2025) fail outright. See:
+  # https://learn.microsoft.com/en-us/cpp/standard-library/coroutine?view=msvc-170
+  target_compile_definitions(${TARGET} PRIVATE
+    "_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS")
 endfunction()
-flutter_inappwebview_windows_apply_standard_settings(${PLUGIN_NAME})
 
-target_link_libraries(${PLUGIN_NAME} PRIVATE ${CMAKE_BINARY_DIR}/packages/Microsoft.Web.WebView2/build/native/Microsoft.Web.WebView2.targets)
-target_link_libraries(${PLUGIN_NAME} PRIVATE ${CMAKE_BINARY_DIR}/packages/Microsoft.Windows.ImplementationLibrary/build/native/Microsoft.Windows.ImplementationLibrary.targets)
-target_link_libraries(${PLUGIN_NAME} PRIVATE ${CMAKE_BINARY_DIR}/packages/nlohmann.json/build/native/nlohmann.json.targets)
+# In source-build mode we apply compile options and link NuGet targets here;
+# in prebuilt-DLL mode the target is IMPORTED so these don't apply.
+if(NOT FLUTTER_INAPPWEBVIEW_WINDOWS_USE_PREBUILT_DLL)
+  flutter_inappwebview_windows_apply_standard_settings(${PLUGIN_NAME})
+
+  target_link_libraries(${PLUGIN_NAME} PRIVATE ${CMAKE_BINARY_DIR}/packages/Microsoft.Web.WebView2/build/native/Microsoft.Web.WebView2.targets)
+  target_link_libraries(${PLUGIN_NAME} PRIVATE ${CMAKE_BINARY_DIR}/packages/Microsoft.Windows.ImplementationLibrary/build/native/Microsoft.Windows.ImplementationLibrary.targets)
+  target_link_libraries(${PLUGIN_NAME} PRIVATE ${CMAKE_BINARY_DIR}/packages/nlohmann.json/build/native/nlohmann.json.targets)
+endif()
 
 # Symbols are hidden by default to reduce the chance of accidental conflicts
 # between plugins. This should not be removed; any symbols that should be
 # exported should be explicitly exported with the FLUTTER_PLUGIN_EXPORT macro.
+# Only meaningful in source-build mode; IMPORTED targets don't carry compile
+# definitions, but the value is harmless.
 set_target_properties(${PLUGIN_NAME} PROPERTIES
   CXX_VISIBILITY_PRESET hidden)
 target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL)
@@ -319,9 +379,18 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin)
 # List of absolute paths to libraries that should be bundled with the plugin.
 # This list could contain prebuilt libraries, or libraries created by an
 # external build triggered from this build file.
-set(flutter_inappwebview_windows_bundled_libraries
-  PARENT_SCOPE
-)
+# When using the prebuilt DLL, ship it with the consuming Flutter app so the
+# OS can locate it at runtime.
+if(FLUTTER_INAPPWEBVIEW_WINDOWS_USE_PREBUILT_DLL)
+  set(flutter_inappwebview_windows_bundled_libraries
+    "${FLUTTER_INAPPWEBVIEW_WINDOWS_PREBUILT_DLL}"
+    PARENT_SCOPE
+  )
+else()
+  set(flutter_inappwebview_windows_bundled_libraries
+    PARENT_SCOPE
+  )
+endif()
 
 # === Tests ===
 # These unit tests can be run from a terminal after building the example, or

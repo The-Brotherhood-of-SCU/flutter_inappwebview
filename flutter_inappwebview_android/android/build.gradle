@@ -21,6 +21,25 @@ rootProject.allprojects {
 
 apply plugin: 'com.android.library'
 
+// =========================================================================
+// Prebuilt AAR support
+// -------------------------------------------------------------------------
+// When a prebuilt AAR is present at android/prebuilt/release/... and neither
+//   - the FLUTTER_INAPPWEBVIEW_ANDROID_FROM_SOURCE env var, nor
+//   - the -PflutterInAppWebViewAndroidFromSource Gradle property
+// is set, the plugin skips compiling its Java sources and instead consumes
+// the prebuilt AAR. This dramatically shortens downstream build times.
+// =========================================================================
+def prebuiltAarFile = file('prebuilt/release/flutter_inappwebview_android-release.aar')
+def usePrebuiltAar =
+    !System.getenv('FLUTTER_INAPPWEBVIEW_ANDROID_FROM_SOURCE')?.toString().equals('1') &&
+    !project.hasProperty('flutterInAppWebViewAndroidFromSource') &&
+    prebuiltAarFile.exists()
+
+if (usePrebuiltAar) {
+    println "flutter_inappwebview_android: using prebuilt AAR ${prebuiltAarFile}"
+}
+
 android {
     // Conditional for compatibility with AGP <4.2.
     if (project.android.hasProperty("namespace")) {
@@ -58,5 +77,22 @@ android {
         implementation 'androidx.browser:browser:1.9.0'
         implementation 'androidx.appcompat:appcompat:1.7.1'
         implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.2.0'
+    }
+}
+
+// When the prebuilt AAR is in use, suppress source compilation by clearing the
+// java source set and consume the prebuilt .aar as a file dependency. The
+// manifest, resources, and proguard rules still come from android/src so the
+// packaged AAR behaves identically to a source build.
+if (usePrebuiltAar) {
+    android.sourceSets {
+        main {
+            java.srcDirs = []
+            manifest.srcFile 'src/main/AndroidManifest.xml'
+            res.srcDirs = ['src/main/res']
+        }
+    }
+    android.dependencies {
+        implementation files(prebuiltAarFile)
     }
 }

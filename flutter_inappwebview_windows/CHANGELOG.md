@@ -1,3 +1,9 @@
+## 0.7.0-beta.4
+
+- Ship a prebuilt Windows DLL at `windows/prebuilt/x64/Release/flutter_inappwebview_windows_plugin.dll` (+ `.lib` / `.pdb`). When this artifact is present, the CMake build wires up the plugin as an `IMPORTED` target and skips recompiling the 224 C/C++ sources — dramatically shortening downstream Flutter app build times on Windows.
+- Opt out at any time with `FLUTTER_INAPPWEBVIEW_WINDOWS_FROM_SOURCE=1` to force a clean source rebuild — required when hacking on the native code.
+- Added `tool/prebuild_windows.ps1` and `tool/prebuild_windows.sh` for regenerating the prebuilt DLL.
+
 ## 0.7.0-beta.3
 
 - Updated flutter_inappwebview_platform_interface version to ^1.4.0-beta.3

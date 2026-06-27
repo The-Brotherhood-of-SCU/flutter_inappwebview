@@ -72,6 +72,57 @@ Add `flutter_inappwebview` as a [dependency in your pubspec.yaml file](https://f
 - [Windows](https://inappwebview.dev/docs/intro/#setup-windows)
 - [Web](https://inappwebview.dev/docs/intro/#setup-web)
 
+## Prebuilt binaries (Android & Windows)
+
+This fork ships **precompiled native binaries** so downstream Flutter apps do
+not have to recompile the plugin's platform code on every clean build.
+
+- **Android:** a release AAR is committed at
+  `flutter_inappwebview_android/android/prebuilt/release/flutter_inappwebview_android-release.aar`.
+  When this file is present, `android/build.gradle` skips compiling the
+  plugin's 167 Java sources and consumes the prebuilt AAR via `implementation files(...)`.
+- **Windows:** a release DLL + `.lib` (+ optional `.pdb`) is committed at
+  `flutter_inappwebview_windows/windows/prebuilt/x64/Release/`.
+  When these files are present, `windows/CMakeLists.txt` wires up the plugin
+  as a CMake `IMPORTED` target — no MSVC compile, no NuGet restore, no
+  C++/WinRT codegen.
+
+### Opting out of the prebuilt path
+
+If you need to hack on the native code (or you don't trust the prebuilt
+artifacts), force a clean source rebuild:
+
+```bash
+# Android — environment variable or Gradle property
+export FLUTTER_INAPPWEBVIEW_ANDROID_FROM_SOURCE=1
+# or:
+cd my_app && ./gradlew -PflutterInAppWebViewAndroidFromSource :app:assembleRelease
+
+# Windows — environment variable (no spaces, exact value "1")
+export FLUTTER_INAPPWEBVIEW_WINDOWS_FROM_SOURCE=1
+flutter build windows --release
+```
+
+### Regenerating the prebuilts
+
+When you change the native code, regenerate the prebuilts with the scripts
+under each plugin's `tool/` directory:
+
+```bash
+# Android (requires JDK + Android SDK + Flutter SDK)
+bash flutter_inappwebview_android/tool/prebuild_android.sh
+# or on Windows:
+pwsh flutter_inappwebview_android/tool/prebuild_android.ps1
+
+# Windows (requires Visual Studio with C++ workload, CMake >= 3.14, NuGet)
+pwsh flutter_inappwebview_windows/tool/prebuild_windows.ps1
+# or on CI:
+bash flutter_inappwebview_windows/tool/prebuild_windows.sh
+```
+
+The script writes the new artifacts directly into the `prebuilt/...` directories
+that are committed to the repo.
+
 ## Support
 
 Did you find this plugin useful? Please consider to [make a donation](https://inappwebview.dev/donate/) to help improve it!

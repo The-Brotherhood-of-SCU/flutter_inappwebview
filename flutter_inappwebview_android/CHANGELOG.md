@@ -1,3 +1,9 @@
+## 1.2.0-beta.4
+
+- Ship a prebuilt Android AAR at `android/prebuilt/release/flutter_inappwebview_android-release.aar`. When this artifact is present, the Gradle module skips recompiling the plugin's Java sources and consumes the AAR directly, dramatically shortening downstream Flutter app build times on Android.
+- Opt out at any time with `FLUTTER_INAPPWEBVIEW_ANDROID_FROM_SOURCE=1` (or `-PflutterInAppWebViewAndroidFromSource` on the Gradle command line) to force a clean source rebuild — required when hacking on the native code.
+- Added `tool/prebuild_android.sh` and `tool/prebuild_android.ps1` for regenerating the prebuilt AAR.
+
 ## 1.2.0-beta.3
 
 - Updated flutter_inappwebview_platform_interface version to ^1.4.0-beta.3

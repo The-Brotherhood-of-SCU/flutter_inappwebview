@@ -17,3 +17,7 @@ x86/
 !*.[Cc]ache/
 
 packages/
+
+# Prebuilt DLL cache — only `x64/Release/` is committed.
+prebuilt/x64/Debug/
+prebuilt/x64/RelWithDebInfo/

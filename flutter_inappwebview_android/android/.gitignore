@@ -11,3 +11,6 @@ gradle-wrapper.jar
 /captures
 local.properties
 keystore.properties
+
+# Prebuilt AAR cache — only the `release/` AAR is committed.
+/prebuilt/debug/
