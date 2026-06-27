@@ -33,9 +33,11 @@ apply plugin: 'com.android.library'
 // The prebuilt AAR is consumed via a *Maven coordinate* (not a local file
 // dep) — that's important because AGP refuses to bundle a local .aar file
 // into another AAR. The prebuild script (`tool/prebuild_android.sh`)
-// publishes the AAR into `android/prebuilt/maven-local/` using the
-// canonical Maven directory layout. This module then adds that directory
-// as a Maven repository and depends on the AAR by coordinates.
+// publishes the AAR into `android/prebuilt/maven-local/` using a
+// compact Maven directory layout (short groupId `i`, artifactId `a`) so
+// the full path fits under Windows MAX_PATH (260 chars) even when git
+// clones into a deep Pub Cache directory. This module then adds that
+// directory as a Maven repository and depends on the AAR by coordinates.
 //
 // =========================================================================
 def prebuiltAarDir = file('prebuilt/release')
@@ -49,8 +51,7 @@ def usePrebuiltAar =
 if (usePrebuiltAar) {
     println "flutter_inappwebview_android: using prebuilt AAR ${prebuiltAarFile}"
     // Register the prebuilt Maven repo on every project so the consuming
-    // app (e.g. test app's :app) can resolve `com.pichillilorenzo:...`
-    // through it.
+    // app (e.g. test app's :app) can resolve `i:a:...` through it.
     rootProject.allprojects {
         repositories {
             maven { url prebuiltMavenRepo.toURI() }
@@ -70,7 +71,9 @@ if (usePrebuiltAar) {
     // consuming app sees the prebuilt's classes on its compile classpath
     // (GeneratedPluginRegistrant instantiates InAppWebViewFlutterPlugin).
     dependencies {
-        api 'com.pichillilorenzo:flutter_inappwebview_android:1.2.0-beta.4'
+        // Short groupId+artifactId keep the Maven repo path under Windows
+        // MAX_PATH (260 chars) when git-cloned into a deep Pub Cache directory.
+        api 'i:a:1.2.0-beta.4'
     }
 }
 
