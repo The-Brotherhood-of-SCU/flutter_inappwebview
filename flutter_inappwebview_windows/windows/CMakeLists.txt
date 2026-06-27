@@ -31,12 +31,48 @@ set(PLUGIN_NAME "flutter_inappwebview_windows_plugin")
 # is wired up as an IMPORTED library that just re-exposes the prebuilt .lib
 # and .dll. This bypasses the 224-source MSVC compile + NuGet restore +
 # C++/WinRT codegen for downstream Flutter app builds.
+#
+# Important: When this CMakeLists.txt is consumed via Flutter's plugin
+# symlinks (`.plugin_symlinks/flutter_inappwebview_windows/windows/...`),
+# CMAKE_CURRENT_SOURCE_DIR points at the symlink path, which does NOT
+# contain the `prebuilt/` directory. We resolve the real path so the
+# prebuilt lookup succeeds regardless of how the plugin is wired in.
 # =========================================================================
 set(_PREBUILT_FROM_SOURCE_ENV "$ENV{FLUTTER_INAPPWEBVIEW_WINDOWS_FROM_SOURCE}")
 set(FLUTTER_INAPPWEBVIEW_WINDOWS_USE_PREBUILT_DLL
     NOT (_PREBUILT_FROM_SOURCE_ENV STREQUAL "1"))
+
+# Resolve symlinks to find the actual plugin source directory.
+get_filename_component(_PLUGIN_REAL_SOURCE_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}" REALPATH)
+
+# When invoked under a multi-config generator (Visual Studio, which is what
+# `flutter build windows` uses by default), CMAKE_BUILD_TYPE is empty. Try
+# Release first (the canonical production build), then Profile, then Debug.
+# The build only succeeds if a matching prebuilt DLL exists.
+set(_PREBUILT_CANDIDATE_CONFIGS
+    "Release" "Profile" "Release" "Debug")
+set(_PREBUILT_CONFIG "")
+foreach(_cfg IN LISTS _PREBUILT_CANDIDATE_CONFIGS)
+  if(EXISTS "${_PLUGIN_REAL_SOURCE_DIR}/prebuilt/${CMAKE_VS_PLATFORM_NAME}/${_cfg}/${PLUGIN_NAME}.dll"
+     AND EXISTS "${_PLUGIN_REAL_SOURCE_DIR}/prebuilt/${CMAKE_VS_PLATFORM_NAME}/${_cfg}/${PLUGIN_NAME}.lib")
+    set(_PREBUILT_CONFIG "${_cfg}")
+    break()
+  endif()
+endforeach()
+
+# Fallback for single-config generators (Ninja etc.): use CMAKE_BUILD_TYPE
+# directly if we didn't find a multi-config prebuilt.
+if(NOT _PREBUILT_CONFIG AND CMAKE_BUILD_TYPE)
+  set(_PREBUILT_CONFIG "${CMAKE_BUILD_TYPE}")
+endif()
+# Last-ditch fallback.
+if(NOT _PREBUILT_CONFIG)
+  set(_PREBUILT_CONFIG "Release")
+endif()
+
 set(FLUTTER_INAPPWEBVIEW_WINDOWS_PREBUILT_DLL_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/prebuilt/${CMAKE_VS_PLATFORM_NAME}/${CMAKE_BUILD_TYPE}")
+    "${_PLUGIN_REAL_SOURCE_DIR}/prebuilt/${CMAKE_VS_PLATFORM_NAME}/${_PREBUILT_CONFIG}")
 set(FLUTTER_INAPPWEBVIEW_WINDOWS_PREBUILT_DLL
     "${FLUTTER_INAPPWEBVIEW_WINDOWS_PREBUILT_DLL_DIR}/${PLUGIN_NAME}.dll")
 set(FLUTTER_INAPPWEBVIEW_WINDOWS_PREBUILT_LIB
@@ -282,8 +318,11 @@ if(FLUTTER_INAPPWEBVIEW_WINDOWS_USE_PREBUILT_DLL)
   # IMPORTED target — re-exposes the prebuilt .lib/.dll without compiling any
   # source files. The downstream Flutter Windows toolchain links the consuming
   # app against this target and copies the .dll into the bundle via the
-  # bundled_libraries hook further down.
-  add_library(${PLUGIN_NAME} SHARED IMPORTED)
+  # bundled_libraries hook further down. `GLOBAL` makes the target visible
+  # to the consumer's CMakeLists so `$<TARGET_FILE:${PLUGIN_NAME}>` resolves
+  # correctly when Flutter's generated_plugins.cmake lists it in
+  # PLUGIN_BUNDLED_LIBRARIES.
+  add_library(${PLUGIN_NAME} SHARED IMPORTED GLOBAL)
   set_target_properties(${PLUGIN_NAME} PROPERTIES
     IMPORTED_LOCATION "${FLUTTER_INAPPWEBVIEW_WINDOWS_PREBUILT_DLL}"
     IMPORTED_IMPLIB   "${FLUTTER_INAPPWEBVIEW_WINDOWS_PREBUILT_LIB}"
@@ -313,7 +352,7 @@ if(NOT FLUTTER_INAPPWEBVIEW_WINDOWS_USE_PREBUILT_DLL AND NOT FLUTTER_WEBVIEW_WIN
     "custom_platform_view/texture_bridge_gpu.cc"
     "custom_platform_view/texture_bridge_gpu.h"
   )
-else()
+elseif(NOT FLUTTER_INAPPWEBVIEW_WINDOWS_USE_PREBUILT_DLL)
   message(STATUS "Building with fallback PixelBuffer texture.")
   target_sources("${PLUGIN_NAME}" PRIVATE
     "custom_platform_view/texture_bridge_fallback.cc"
@@ -364,17 +403,21 @@ endif()
 # Symbols are hidden by default to reduce the chance of accidental conflicts
 # between plugins. This should not be removed; any symbols that should be
 # exported should be explicitly exported with the FLUTTER_PLUGIN_EXPORT macro.
-# Only meaningful in source-build mode; IMPORTED targets don't carry compile
-# definitions, but the value is harmless.
+# These are no-ops on IMPORTED targets (which is fine; the prebuilt DLL was
+# already built with these settings at prebuild time).
 set_target_properties(${PLUGIN_NAME} PROPERTIES
   CXX_VISIBILITY_PRESET hidden)
-target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL)
+if(NOT FLUTTER_INAPPWEBVIEW_WINDOWS_USE_PREBUILT_DLL)
+  target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL)
+endif()
 
 # Source include directories and library dependencies. Add any plugin-specific
-# dependencies here.
+# dependencies here. INTERFACE-only properties work on IMPORTED targets.
 target_include_directories(${PLUGIN_NAME} INTERFACE
   "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin)
+if(NOT FLUTTER_INAPPWEBVIEW_WINDOWS_USE_PREBUILT_DLL)
+  target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin)
+endif()
 
 # List of absolute paths to libraries that should be bundled with the plugin.
 # This list could contain prebuilt libraries, or libraries created by an
