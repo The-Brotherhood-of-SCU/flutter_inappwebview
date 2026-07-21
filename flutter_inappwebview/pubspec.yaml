@@ -32,8 +32,8 @@ dependencies:
     # path: ../flutter_inappwebview_web
   flutter_inappwebview_windows:
     path: ../flutter_inappwebview_windows
-  flutter_inappwebview_linux: ^0.1.0-beta.1
-    # path: ../flutter_inappwebview_linux
+  flutter_inappwebview_linux_placeholder:
+    path: ../flutter_inappwebview_linux_placeholder
 
 dev_dependencies:
   flutter_test:
@@ -63,7 +63,7 @@ flutter:
       windows:
         default_package: flutter_inappwebview_windows
       linux:
-        default_package: flutter_inappwebview_linux
+        default_package: flutter_inappwebview_linux_placeholder
 
   assets:
     - packages/flutter_inappwebview/assets/t_rex_runner/t-rex.html
