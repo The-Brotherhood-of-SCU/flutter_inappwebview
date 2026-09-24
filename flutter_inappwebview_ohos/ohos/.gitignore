@@ -1,0 +1,11 @@
+/node_modules
+/oh_modules
+/.preview
+/build
+/.cxx
+/.test
+/.hvigor
+/har
+*.har
+/BuildProfile.ets
+/oh-package-lock.json5

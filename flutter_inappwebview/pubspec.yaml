@@ -32,6 +32,8 @@ dependencies:
     # path: ../flutter_inappwebview_web
   flutter_inappwebview_windows:
     path: ../flutter_inappwebview_windows
+  flutter_inappwebview_ohos:
+    path: ../flutter_inappwebview_ohos
   flutter_inappwebview_linux_placeholder:
     path: ../flutter_inappwebview_linux_placeholder
 
@@ -62,6 +64,8 @@ flutter:
         default_package: flutter_inappwebview_web
       windows:
         default_package: flutter_inappwebview_windows
+      ohos:
+        default_package: flutter_inappwebview_ohos
       linux:
         default_package: flutter_inappwebview_linux_placeholder
 
