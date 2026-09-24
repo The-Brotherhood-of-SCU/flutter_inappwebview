@@ -57,6 +57,7 @@ class OhosInAppWebViewWidgetCreationParams
       super.onScrollChanged,
       @Deprecated('Use onDownloadStartRequest instead') super.onDownloadStart,
       super.onDownloadStartRequest,
+      super.onDownloadStarting,
       @Deprecated('Use onLoadResourceWithCustomScheme instead')
       super.onLoadResourceCustomScheme,
       super.onLoadResourceWithCustomScheme,
@@ -179,6 +180,7 @@ class OhosInAppWebViewWidgetCreationParams
             onScrollChanged: params.onScrollChanged,
             onDownloadStart: params.onDownloadStart,
             onDownloadStartRequest: params.onDownloadStartRequest,
+            onDownloadStarting: params.onDownloadStarting,
             onLoadResourceCustomScheme: params.onLoadResourceCustomScheme,
             onLoadResourceWithCustomScheme:
                 params.onLoadResourceWithCustomScheme,
@@ -415,7 +417,8 @@ class OhosInAppWebViewWidget extends PlatformInAppWebViewWidget {
     if (params.onLoadResource != null && settings.useOnLoadResource == null) {
       settings.useOnLoadResource = true;
     }
-    if (params.onDownloadStartRequest != null &&
+    if ((params.onDownloadStarting != null ||
+            params.onDownloadStartRequest != null) &&
         settings.useOnDownloadStart == null) {
       settings.useOnDownloadStart = true;
     }

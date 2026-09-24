@@ -81,6 +81,16 @@ controller.addJavaScriptHandler(
 
 转换覆盖 `initialSettings`、`setSettings` 和 `getSettings`。应用内浏览器保留旧版 `options` 的回退路径。
 
+### 下载开始回调
+
+内嵌 WebView 和无界面 WebView 的创建参数保留 `onDownloadStarting`。设置该回调时，若 `useOnDownloadStart` 未指定，则自动启用下载事件；显式设置为 `false` 时仍保持关闭。
+
+OHOS 原生层沿用 `onDownloadStartRequest` 消息名。Dart 层将下载 URL、文件名、MIME 类型、内容长度等信息解析为 `DownloadStartRequest`，优先调用并等待 `onDownloadStarting`，将非空响应转换为消息返回值。未设置新回调时，依次回退到 `onDownloadStartRequest` 和 `onDownloadStart`；新回调返回 `null` 不会再次调用旧回调。
+
+应用内浏览器在保留旧事件分发的同时，也调用并等待 `onDownloadStarting`。使用应用内浏览器时，需通过 `InAppBrowserClassSettings.webViewSettings` 显式设置 `useOnDownloadStart: true`。
+
+应用可在 `onDownloadStarting` 中接入自己的附件下载逻辑。当前 OHOS 原生实现只发送下载通知，不处理 `DownloadStartResponse` 中的 `handled`、`action` 或 `resultFilePath`，因此这些字段不能用于控制原生下载界面、取消下载或指定保存路径。
+
 ### 打印接口
 
 打印完成回调使用控制器的 `onComplete` 属性，不再通过 `PlatformPrintJobControllerCreationParams` 构造参数传入。收到原生 `onComplete` 消息时，调用并等待该回调。
@@ -109,9 +119,9 @@ controller.addJavaScriptHandler(
 | --- | --- |
 | [主包 pubspec.yaml](../../flutter_inappwebview/pubspec.yaml) | 引入 OHOS 子包并指定默认平台实现 |
 | [子包 pubspec.yaml](../pubspec.yaml) | 对齐公共接口依赖，声明插件实现关系 |
-| [in_app_webview_controller.dart](../lib/src/in_app_webview/in_app_webview_controller.dart) | JS 回调、权限、设置、打印、上下文菜单和 MHT 兼容 |
-| [in_app_webview.dart](../lib/src/in_app_webview/in_app_webview.dart) | 内嵌 WebView 初始设置转换 |
-| [headless_in_app_webview.dart](../lib/src/in_app_webview/headless_in_app_webview.dart) | 无界面 WebView 初始设置转换 |
+| [in_app_webview_controller.dart](../lib/src/in_app_webview/in_app_webview_controller.dart) | JS 回调、下载事件分发、权限、设置、打印、上下文菜单和 MHT 兼容 |
+| [in_app_webview.dart](../lib/src/in_app_webview/in_app_webview.dart) | 内嵌 WebView 初始设置转换、下载回调传递与事件启用 |
+| [headless_in_app_webview.dart](../lib/src/in_app_webview/headless_in_app_webview.dart) | 无界面 WebView 初始设置转换、下载回调传递与事件启用 |
 | [in_app_browser.dart](../lib/src/in_app_browser/in_app_browser.dart) | 应用内浏览器设置转换 |
 | [print_job_controller.dart](../lib/src/print_job/print_job_controller.dart) | 打印完成回调与结果解析 |
 | [web_message_port.dart](../lib/src/web_message/web_message_port.dart) | `toMap` 签名适配 |
@@ -158,12 +168,12 @@ OHOS 构建忽略规则额外覆盖 `.hvigor/`、`har/`、`*.har`、`BuildProfil
 | 验证项 | 结果 |
 | --- | --- |
 | 依赖解析 | 通过 |
-| Dart 接口与模拟 MethodChannel 测试 | 120 项通过，包含上游测试及兼容回归用例 |
-| Dart 静态检查 | 0 个错误，4 个警告，392 个提示级诊断 |
+| Dart 接口与模拟 MethodChannel 测试 | 135 项通过，包含上游测试及兼容回归用例，其中下载回调回归用例 15 项 |
+| Dart 静态检查 | 0 个错误，4 个警告，393 个提示级诊断 |
 | 参考示例原生构建 | 已生成插件 HAR 和未签名 HAP；Flutter 构建命令因缺少调试签名返回非零退出码 |
 | 签名安装与真机运行 | 尚未验证 |
 
-测试套件未随子包分发，120 项测试结果是集成验证记录，不代表当前目录提供可直接运行的完整测试套件。原生构建结果来自参考示例，当前子包没有独立的 HAP 构建入口。设备上的网页加载、登录、权限弹窗、文件选择及打印仍需由应用验证。
+测试套件未随子包分发，135 项测试结果是集成验证记录，不代表当前目录提供可直接运行的完整测试套件。下载回归用例覆盖参数转换、事件自动启用与显式关闭、请求信息传递、异步回调响应、新旧回调优先级及应用内浏览器事件分发；验证使用模拟 MethodChannel，尚未在真机验证附件下载。原生构建结果来自参考示例，当前子包没有独立的 HAP 构建入口。设备上的网页加载、登录、权限弹窗、文件选择及打印仍需由应用验证。
 
 4 个静态警告来自 `in_app_webview.dart` 中上游已有的未使用导入、变量和方法。以下命令允许警告及提示，但仍会因分析错误而失败。从仓库根目录执行：
 
@@ -178,7 +188,7 @@ flutter analyze lib --no-pub --no-fatal-infos --no-fatal-warnings
 更新时应以本文记录的上游提交为比较基线，并单独审查“补丁位置”中的兼容代码。
 
 1. 比较上游 OHOS 实现和公共接口的变化，确认目标版本是否仍使用相同的消息格式。
-2. 检查 JS 回调签名、权限标识、内容拦截规则和打印枚举，移除已由上游解决的兼容补丁。
+2. 检查 JS 回调签名、下载事件桥接、权限标识、内容拦截规则和打印枚举，移除已由上游解决的兼容补丁。
 3. 验证主包的平台注册、依赖解析和 Dart 静态分析，并在应用工程中执行原生构建及设备测试。
 4. 更新本文的上游提交、适配版本和验证结果。
 

@@ -422,7 +422,8 @@ class OhosInAppWebViewController extends PlatformInAppWebViewController
         if ((webviewParams != null &&
                 // ignore: deprecated_member_use_from_same_package
                 (webviewParams!.onDownloadStart != null ||
-                    webviewParams!.onDownloadStartRequest != null)) ||
+                    webviewParams!.onDownloadStartRequest != null ||
+                    webviewParams!.onDownloadStarting != null)) ||
             _inAppBrowserEventHandler != null) {
           Map<String, dynamic> arguments =
               call.arguments.cast<String, dynamic>();
@@ -430,7 +431,10 @@ class OhosInAppWebViewController extends PlatformInAppWebViewController
               DownloadStartRequest.fromMap(arguments)!;
 
           if (webviewParams != null) {
-            if (webviewParams!.onDownloadStartRequest != null)
+            if (webviewParams!.onDownloadStarting != null)
+              return (await webviewParams!.onDownloadStarting!(
+                  _controllerFromPlatform, downloadStartRequest))?.toMap();
+            else if (webviewParams!.onDownloadStartRequest != null)
               webviewParams!.onDownloadStartRequest!(
                   _controllerFromPlatform, downloadStartRequest);
             else {
@@ -444,6 +448,8 @@ class OhosInAppWebViewController extends PlatformInAppWebViewController
                 .onDownloadStart(downloadStartRequest.url);
             _inAppBrowserEventHandler!
                 .onDownloadStartRequest(downloadStartRequest);
+            return (await _inAppBrowserEventHandler!
+                .onDownloadStarting(downloadStartRequest))?.toMap();
           }
         }
         break;
