@@ -21,6 +21,23 @@ import InAppWebViewClient from './InAppWebViewClient';
 
 const TAG = 'WebNodeController'
 
+const narrowViewportScript: ScriptItem = {
+  script: `(() => {
+    const head = document.head;
+    if (!head) return;
+    let viewport = head.querySelector('meta[name="viewport"]');
+    if (!viewport) {
+      viewport = document.createElement('meta');
+      viewport.name = 'viewport';
+      head.appendChild(viewport);
+    }
+    const otherValues = (viewport.content || '').split(',').map(value => value.trim())
+      .filter(value => value && !/^(width|initial-scale)\s*=/i.test(value));
+    viewport.content = ['width=device-width', 'initial-scale=1', ...otherValues].join(', ');
+  })();`,
+  scriptRules: ['*']
+};
+
 @Observed
 export class WebBuilderParams {
   public controller: web_webview.WebviewController;
@@ -154,6 +171,7 @@ function buildWebNode(params: WebBuilderParams) {
     .onlineImageAccess(params.inAppWebView.customSettings.onlineImageAccess)
     .zoomAccess(params.inAppWebView.customSettings.zoomAccess)
     .overviewModeAccess(params.inAppWebView.customSettings.overviewModeAccess)
+    .metaViewport(true)
     .databaseAccess(params.inAppWebView.customSettings.databaseAccess)
     .geolocationAccess(params.inAppWebView.customSettings.geolocationAccess)
     .mediaPlayGestureAccess(params.inAppWebView.customSettings.mediaPlayGestureAccess)
@@ -182,6 +200,7 @@ function buildWebNode(params: WebBuilderParams) {
     .layoutMode(params.inAppWebView.customSettings.layoutMode)
     .enableNativeEmbedMode(params.inAppWebView.customSettings.enableNativeEmbedMode)
     .javaScriptOnDocumentStart(params.startScripts)
+    .runJavaScriptOnHeadEnd(params.inAppWebView.customSettings.useWideViewPort ? [] : [narrowViewportScript])
     .backgroundColor(params.transparentBackground ? Color.Transparent : Color.White)
 }
 

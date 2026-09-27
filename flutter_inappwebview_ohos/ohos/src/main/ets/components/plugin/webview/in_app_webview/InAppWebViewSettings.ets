@@ -31,6 +31,7 @@ export default class InAppWebViewSettings implements ISettings<InAppWebViewInter
   public onlineImageAccess: boolean = true;
   public zoomAccess: boolean = true;
   public overviewModeAccess: boolean = true;
+  public useWideViewPort: boolean = true;
   public databaseAccess: boolean = false;
   public geolocationAccess: boolean = true;
   public mediaPlayGestureAccess: boolean = true;
@@ -132,6 +133,9 @@ export default class InAppWebViewSettings implements ISettings<InAppWebViewInter
           break;
         case "loadWithOverviewMode":
           this.overviewModeAccess = value as boolean
+          break;
+        case "useWideViewPort":
+          this.useWideViewPort = value as boolean;
           break;
         case "databaseEnabled":
           this.databaseAccess = value as boolean
@@ -313,6 +317,7 @@ export default class InAppWebViewSettings implements ISettings<InAppWebViewInter
     settings.set("blockNetworkImage",!this.onlineImageAccess);
     settings.set("supportZoom", this.zoomAccess);
     settings.set("loadWithOverviewMode", this.overviewModeAccess);
+    settings.set("useWideViewPort", this.useWideViewPort);
     settings.set("databaseEnabled", this.databaseAccess);
     settings.set("geolocationEnabled", this.geolocationAccess);
     settings.set("mediaPlaybackRequiresUserGesture", this.mediaPlayGestureAccess);
