@@ -89,6 +89,10 @@ OHOS 设置增加 `useWideViewPort`，默认值为 `true`，并支持从 Dart �
 
 目前该设置用于 WebView 创建阶段；运行时通过 `setSettings()` 切换 `useWideViewPort` 尚未接通脚本注册的更新链路。
 
+### 页面暗色模式
+
+OHOS WebView 默认使用 `WebDarkMode.Auto`，跟随系统深浅色设置，使网页已有的 `prefers-color-scheme` 样式生效。`forceDarkAccess` 保持 `false`，不对没有暗色样式的网页强制变色。应用显式指定 `forceDark` 时仍按传入值处理。
+
 ### 下载开始回调
 
 内嵌 WebView 和无界面 WebView 的创建参数保留 `onDownloadStarting`。设置该回调时，若 `useOnDownloadStart` 未指定，则自动启用下载事件；显式设置为 `false` 时仍保持关闭。
@@ -135,7 +139,7 @@ OHOS 原生层沿用 `onDownloadStartRequest` 消息名。Dart 层将下载 URL�
 | [web_message_port.dart](../lib/src/web_message/web_message_port.dart) | `toMap` 签名适配 |
 | [webview_asset_loader.dart](../lib/src/webview_asset_loader.dart) | 路径处理器 `toMap` 签名适配 |
 | [ohos_serialization.dart](../lib/src/ohos_serialization.dart) | 新增的权限、内容拦截和打印转换函数 |
-| [InAppWebViewSettings.ets](src/main/ets/components/plugin/webview/in_app_webview/InAppWebViewSettings.ets) | OHOS `useWideViewPort` 的默认值、解析和返回 |
+| [InAppWebViewSettings.ets](src/main/ets/components/plugin/webview/in_app_webview/InAppWebViewSettings.ets) | OHOS `useWideViewPort` 的解析与默认值，以及跟随系统的暗色模式默认值 |
 | [WebNodeController.ets](src/main/ets/components/plugin/webview/in_app_webview/WebNodeController.ets) | viewport meta 标签启用及 head-end 页面脚本注册 |
 | [.gitignore](.gitignore) | 排除 OHOS 构建产物 |
 | [README.md](../README.md) | 子包概览及使用限制 |
@@ -182,6 +186,7 @@ OHOS 构建忽略规则额外覆盖 `.hvigor/`、`har/`、`*.har`、`BuildProfil
 | Dart 静态检查 | 0 个错误，4 个警告，393 个提示级诊断 |
 | 参考示例原生构建 | 已生成插件 HAR 和未签名 HAP；Flutter 构建命令因缺少调试签名返回非零退出码 |
 | viewport 适配 | 已做脚本行为检查；尚未在真机验证列表、详情、返回与首次显示 |
+| 深浅色切换 | 尚未在真机验证公告列表、详情及返回后的颜色 |
 | 签名安装与真机运行 | 尚未验证 |
 
 测试套件未随子包分发，135 项测试结果是集成验证记录，不代表当前目录提供可直接运行的完整测试套件。下载回归用例覆盖参数转换、事件自动启用与显式关闭、请求信息传递、异步回调响应、新旧回调优先级及应用内浏览器事件分发；验证使用模拟 MethodChannel，尚未在真机验证附件下载。原生构建结果来自参考示例，当前子包没有独立的 HAP 构建入口。设备上的网页加载、登录、权限弹窗、文件选择及打印仍需由应用验证。

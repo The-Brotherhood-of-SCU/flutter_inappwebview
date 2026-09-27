@@ -52,7 +52,7 @@ export default class InAppWebViewSettings implements ISettings<InAppWebViewInter
   public webStandardFont: string = "sans-serif";
   public webFantasyFont: string = "fantasy";
   public webCursiveFont: string = "cursive";
-  public darkMode: WebDarkMode = WebDarkMode.Off;
+  public darkMode: WebDarkMode = WebDarkMode.Auto;
   public forceDarkAccess: boolean = false;
   public pinchSmooth: boolean = false;
   public allowWindowOpenMethod: boolean = false;
