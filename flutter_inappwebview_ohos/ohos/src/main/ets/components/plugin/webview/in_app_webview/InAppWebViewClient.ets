@@ -725,20 +725,8 @@ export default class InAppWebViewClient {
     return false;
   }
   onBeforeUnload = (event: OnBeforeUnloadEvent) => {
-    try {
-      Log.d(TAG, 'onBeforeUnload url=' + event.url)
-      if (this.inAppWebView != null) {
-        this.inAppWebView!.beforeUnloadNavigationPending = true;
-      }
-      if (this.inAppWebView != null && this.inAppWebView!.channelDelegate != null) {
-        this.inAppWebView!.channelDelegate.onJsBeforeUnload(event.url, event.message,
-          new InnerJsBeforeUnloadCallback(this, event.result, event.message));
-        return true;
-      }
-    } catch (e) {
-      Log.e(TAG, 'onBeforeUnload error: ' + JSON.stringify(e));
-    }
-    return false;
+    event.result.handleConfirm();
+    return true;
   }
   onConfirm = (event: OnConfirmEvent) => {
     try {
@@ -1872,9 +1860,6 @@ export default class InAppWebViewClient {
       return true;
     }
     Log.d(TAG, 'onOverrideUrlLoading=' + requestUrl)
-    if (this.tryHandleBeforeUnloadNavigationPolyfill(request, requestUrl)) {
-      return true;
-    }
     // Allow the first main-frame navigation during back/forward (the
     // back/forward target itself). Block subsequent main-frame navigations
     // that occur during the same back/forward operation (e.g. JS redirects
